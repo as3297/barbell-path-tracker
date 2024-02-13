@@ -8,21 +8,34 @@
 
 >*Take my favourite weightlifter Lu XiaoJun as an example*     
 ## Barbell plate detector
-The finetuned model of barbell detector was taken from the Roboflow platform 
+The finetuned model of barbell detector was taken from the Roboflow platform.
+
 Licence Roboflow CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
 
-This is full citation of Roboflow barbell plate detection model:
-@misc{ barbelld_dataset,
-    title = { BarbellD Dataset },
-    type = { Open Source Dataset },
-    author = { Gi Inn },
-    howpublished = { \url{ https://universe.roboflow.com/gi-inn/barbelld } },
-    url = { https://universe.roboflow.com/gi-inn/barbelld },
-    journal = { Roboflow Universe },
-    publisher = { Roboflow },
-    year = { 2023 },
-    month = { aug },
-    note = { visited on 2024-02-13 },
+This is full citation of Roboflow barbell plate detection model:<br>
+
+@misc{ barbelld_dataset,<br>
+
+    title = { BarbellD Dataset },<br>
+	
+    type = { Open Source Dataset },<br>
+	
+    author = { Gi Inn },<br>
+	
+    howpublished = { \url{ https://universe.roboflow.com/gi-inn/barbelld } },<br>
+	
+    url = { https://universe.roboflow.com/gi-inn/barbelld },<br>
+	
+    journal = { Roboflow Universe },<br>
+	
+    publisher = { Roboflow },<br>
+	
+    year = { 2023 },<br>
+	
+    month = { aug },<br>
+	
+    note = { visited on 2024-02-13 },<br>
+	
 }
 ## Description  
         
