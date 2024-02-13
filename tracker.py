@@ -5,34 +5,45 @@ import dlib
 import os
 import numpy as np
 from collections import deque
+import sys
 
 class pathTracker(object):
     def __init__(self, windowName = 'default window', videoName = "default video"):
         self.selection = None
         self.track_window = None
         self.drag_start = None
+        self.videoName = videoName
         self.speed = 50  
-        self.video_size = (960,540)     
+        self.video_size = (720//2,1280//2)#(960,540)
         self.box_color = (255,255,255)      
         self.path_color = (0,0,255)
         #                          0        1     2      3         4           5            6              7              8       
         self.tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'Dlib_Tracker', 'CamShift','Template_Matching']
-        self.tracker_type = self.tracker_types[6] 
+        self.tracker_type = self.tracker_types[6]
         # create tracker window
         cv2.namedWindow(windowName,cv2.WINDOW_AUTOSIZE)
         cv2.setMouseCallback(windowName,self.onmouse)
         self.windowName = windowName
+
         # load video
         self.cap = cv2.VideoCapture(videoName)
         if not self.cap.isOpened():
             print("Video doesn't exit!", videoName)
         self.frames_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # creat result video file
+        absolute_path = os.path.dirname(__file__)
+        res_fname = os.path.join(absolute_path,"Result","Tracking",os.path.basename(self.videoName).split(".")[0])
+        self.res_fname = res_fname + ".png"
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.video_res_writer = cv2.VideoWriter(res_fname+".mov", fourcc, fps, self.video_size)
+        print("fname", res_fname)
         # store all center points for each frame
         self.points = deque(maxlen = self.frames_count)
 
         # init tracker
         if self.tracker_type == 'BOOSTING':
-            self.tracker = cv2.TrackerBoosting_create()
+            self.tracker = cv2.legacy.TrackerBoosting_create()
         elif self.tracker_type == 'MIL':
             self.tracker = cv2.TrackerMIL_create() 
         elif self.tracker_type == 'KCF':
@@ -40,7 +51,7 @@ class pathTracker(object):
         elif self.tracker_type == 'TLD':
             self.tracker = cv2.TrackerTLD_create()  
         elif self.tracker_type == 'MEDIANFLOW':
-            self.tracker = cv2.TrackerMedianFlow_create()   
+            self.tracker = cv2.legacy.TrackerMedianFlow_create()
         elif self.tracker_type == 'GOTURN':
             self.tracker = cv2.TrackerGOTURN_create()  
         elif self.tracker_type == 'Dlib_Tracker':
@@ -71,6 +82,7 @@ class pathTracker(object):
         center_point_x = int(x+ 0.5*w)
         center_point_y = int(y + 0.5*h)
         center = (center_point_x,center_point_y)
+        # frequency of processing
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
         self.points.appendleft(center)
         # tracker's bound
@@ -172,9 +184,14 @@ class pathTracker(object):
             i += 1
             # save picture
             if i == self.frames_count:
-                cv2.imwrite('Video/track_result.jpg',image)
+                cv2.imwrite(self.res_fname,image)
+            # Write the processed frame to the video
+            self.video_res_writer.write(image)
+
+        # Release the VideoWriter and close the output file
+        self.video_res_writer.release()
         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    myTracker = pathTracker(windowName = 'myTracker',videoName = "Video/LuXiaojun.mp4")
+    myTracker = pathTracker(windowName = 'myTracker',videoName = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9199.mov")
     myTracker.start_tracking()
