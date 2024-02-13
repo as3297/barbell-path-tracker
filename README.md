@@ -7,6 +7,23 @@
 ![](Result/luxiaojun.jpg)
 
 >*Take my favourite weightlifter Lu XiaoJun as an example*     
+## Barbell plate detector
+The finetuned model of barbell detector was taken from the Roboflow platform 
+Licence Roboflow CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
+
+This is full citation of Roboflow barbell plate detection model:
+@misc{ barbelld_dataset,
+    title = { BarbellD Dataset },
+    type = { Open Source Dataset },
+    author = { Gi Inn },
+    howpublished = { \url{ https://universe.roboflow.com/gi-inn/barbelld } },
+    url = { https://universe.roboflow.com/gi-inn/barbelld },
+    journal = { Roboflow Universe },
+    publisher = { Roboflow },
+    year = { 2023 },
+    month = { aug },
+    note = { visited on 2024-02-13 },
+}
 ## Description  
         
 There are 9 different trackers you can choose to track barbell's path, including BOOSTING, MIL, KCF, TLD, MEDIANFLOW,， GOTURN, Dlib_Tracker, CamShift and TemplateMatching. This tracker is not only used to track barbell, you can also use it to track other objects, like cars or some moving objects.
