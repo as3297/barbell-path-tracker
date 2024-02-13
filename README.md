@@ -14,29 +14,18 @@ Licence Roboflow CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
 
 This is full citation of Roboflow barbell plate detection model:<br>
 
-@misc{ barbelld_dataset,<br>
-
-    title = { BarbellD Dataset },<br>
-	
-    type = { Open Source Dataset },<br>
-	
-    author = { Gi Inn },<br>
-	
-    howpublished = { \url{ https://universe.roboflow.com/gi-inn/barbelld } },<br>
-	
-    url = { https://universe.roboflow.com/gi-inn/barbelld },<br>
-	
-    journal = { Roboflow Universe },<br>
-	
-    publisher = { Roboflow },<br>
-	
-    year = { 2023 },<br>
-	
-    month = { aug },<br>
-	
-    note = { visited on 2024-02-13 },<br>
-	
-}
+    @misc{ barbelld_dataset,
+    title = { BarbellD Dataset },
+    type = { Open Source Dataset },
+    author = { Gi Inn },
+    howpublished = { \url{ https://universe.roboflow.com/gi-inn/barbelld } },
+    url = { https://universe.roboflow.com/gi-inn/barbelld },
+    journal = { Roboflow Universe },
+    publisher = { Roboflow },
+    year = { 2023 },
+    month = { aug },
+    note = { visited on 2024-02-13 },
+    }
 ## Description  
         
 There are 9 different trackers you can choose to track barbell's path, including BOOSTING, MIL, KCF, TLD, MEDIANFLOW,， GOTURN, Dlib_Tracker, CamShift and TemplateMatching. This tracker is not only used to track barbell, you can also use it to track other objects, like cars or some moving objects.
