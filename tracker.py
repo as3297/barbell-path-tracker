@@ -5,7 +5,8 @@ import dlib
 import os
 import numpy as np
 from collections import deque
-import sys
+from detector import BarbellPlateDetector
+from util import save_tracking_par_csv
 
 class pathTracker(object):
     def __init__(self, windowName = 'default window', videoName = "default video"):
@@ -22,25 +23,24 @@ class pathTracker(object):
         self.tracker_type = self.tracker_types[6]
         # create tracker window
         cv2.namedWindow(windowName,cv2.WINDOW_AUTOSIZE)
-        cv2.setMouseCallback(windowName,self.onmouse)
+        #cv2.setMouseCallback(windowName,self.onmouse)
         self.windowName = windowName
-
         # load video
         self.cap = cv2.VideoCapture(videoName)
         if not self.cap.isOpened():
             print("Video doesn't exit!", videoName)
         self.frames_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        # creat result video file
+        # creat result files
         absolute_path = os.path.dirname(__file__)
         res_fname = os.path.join(absolute_path,"Result","Tracking",os.path.basename(self.videoName).split(".")[0])
-        self.res_fname = res_fname + ".png"
+        self.res_fname = res_fname + ".jpg"
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.video_res_writer = cv2.VideoWriter(res_fname+".mov", fourcc, fps, self.video_size)
-        print("fname", res_fname)
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.video_res_writer = cv2.VideoWriter(res_fname+".mov", fourcc, 15, self.video_size)
+        # Specify the CSV file path
+        self.csv_fpath = res_fname + ".csv"
         # store all center points for each frame
         self.points = deque(maxlen = self.frames_count)
-
         # init tracker
         if self.tracker_type == 'BOOSTING':
             self.tracker = cv2.legacy.TrackerBoosting_create()
@@ -56,6 +56,19 @@ class pathTracker(object):
             self.tracker = cv2.TrackerGOTURN_create()  
         elif self.tracker_type == 'Dlib_Tracker':
             self.tracker = dlib.correlation_tracker()
+
+    def detect_init_window(self,im):
+        """
+
+        :param im: rgb array of image
+        :return:
+        """
+        det = BarbellPlateDetector()
+        im_bgr2rgb = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        xyxy = det.detect(im_bgr2rgb)
+        xyxy = [int(xyxy[i]) for i in range(len(xyxy))]
+        self.selection = tuple(xyxy)
+        self.track_window = self.selection
 
     def onmouse(self,event, x, y, flags, param):
         """
@@ -74,13 +87,20 @@ class pathTracker(object):
             self.drag_start = None
             self.track_window = self.selection
             self.selection = None
-          
+
+    def find_the_center(self,x,y,w,h):
+
+        center_point_x = x + 0.5 * w
+        center_point_y = y + 0.5 * h
+        return center_point_x, center_point_y
+
     def drawing(self,image,x,y,w,h,timer):
         """
         Drawing the bound, center point and path for tracker in real-time
         """
-        center_point_x = int(x+ 0.5*w)
-        center_point_y = int(y + 0.5*h)
+        center_point_x,center_point_y = self.find_the_center(x,y,w,h)
+        center_point_x = int(center_point_x)
+        center_point_y = int(center_point_y)
         center = (center_point_x,center_point_y)
         # frequency of processing
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
@@ -104,6 +124,10 @@ class pathTracker(object):
         tracking!
         """
         i = 0
+        #initiate track parameters (x,y,time_step) list
+        center_point_xs = []
+        center_point_ys = []
+        ts = []
         for f in range(self.frames_count):
             timer = cv2.getTickCount()
             ret, self.frame = self.cap.read()
@@ -114,17 +138,14 @@ class pathTracker(object):
             img_raw = self.frame
             image = cv2.resize(img_raw.copy(), self.video_size, interpolation = cv2.INTER_CUBIC)
             # only need to select object on the first frame
-            if i == 0: 
-                while(True):
-                    img_first = image.copy()
-                    if self.track_window:
-                        cv2.rectangle(img_first, (self.track_window[0],self.track_window[1]), (self.track_window[2], self.track_window[3]), self.box_color, 1)
-                    elif self.selection:
-                        cv2.rectangle(img_first, (self.selection[0],self.selection[1]), (self.selection[2], self.selection[3]), self.box_color, 1)
-                    cv2.imshow(self.windowName, img_first)
-                    # if press enter then selection is end
-                    if cv2.waitKey(self.speed) == 13:
-                        break
+            if i == 0:
+                img_first = image.copy()
+                self.detect_init_window(img_first)
+                if self.track_window:
+                    cv2.rectangle(img_first, (self.track_window[0],self.track_window[1]), (self.track_window[2], self.track_window[3]), self.box_color, 1)
+                elif self.selection:
+                    cv2.rectangle(img_first, (self.selection[0],self.selection[1]), (self.selection[2], self.selection[3]), self.box_color, 1)
+                cv2.imshow(self.windowName, img_first)
                 # Dlib
                 if self.tracker_type == 'Dlib_Tracker':
                         self.tracker.start_track(image, dlib.rectangle(self.track_window[0], self.track_window[1], self.track_window[2], self.track_window[3]))
@@ -187,11 +208,25 @@ class pathTracker(object):
                 cv2.imwrite(self.res_fname,image)
             # Write the processed frame to the video
             self.video_res_writer.write(image)
+            # tracker path
 
+            #time step
+            t = 1/self.fps*i
+            print("X={}, Y={}, time_step={}".format(x, y, t))
+            # Append the coordinates to the list
+            center_point_x, center_point_y = self.find_the_center(x, y, w, h)
+            center_point_xs.append(center_point_x)
+            center_point_ys.append(center_point_y)
+            ts.append(t)
+        #save the traking parameters to csv
+        save_tracking_par_csv(self.csv_fpath,center_point_xs,center_point_ys,ts,self.track_window[0],self.track_window[1],self.track_window[2], self.track_window[3])
         # Release the VideoWriter and close the output file
         self.video_res_writer.release()
         cv2.destroyAllWindows()
 
+
+
+
 if __name__ == '__main__':
-    myTracker = pathTracker(windowName = 'myTracker',videoName = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9199.mov")
+    myTracker = pathTracker(windowName = 'myTracker',videoName = r"C:\NewData\Projects\Barbell\data\better_videos\37b9b033d92441df85f1575a8703658d.mov")
     myTracker.start_tracking()

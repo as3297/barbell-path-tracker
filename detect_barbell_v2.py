@@ -33,11 +33,10 @@ image = cv2.resize(img_raw.copy(), video_size, interpolation = cv2.INTER_CUBIC)
 # infer on a local image
 im_bgr2rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 results = model.predict(im_bgr2rgb, confidence=40, overlap=30).json()
-im_bgr2rgb = Image.fromarray(np.uint8(im_bgr2rgb))
 labels = [item["class"] for item in results["predictions"]]
 
 detections = sv.Detections.from_roboflow(results)
-
+print("Bounding box vertices ", detections.xyxy)
 label_annotator = sv.LabelAnnotator()
 bounding_box_annotator = sv.BoxAnnotator()
 
@@ -47,15 +46,7 @@ annotated_image = label_annotator.annotate(
     scene=annotated_image, detections=detections, labels=labels)
 
 sv.plot_image(image=annotated_image, size=(16, 16))
-draw = ImageDraw.Draw(im_bgr2rgb, "RGBA")
-x, y = results["predictions"][0]["x"],results["predictions"][0]["y"]
-width, height = results["predictions"][0]["width"],results["predictions"][0]["height"]
-draw.rectangle((x-width//2,y-height//2,x+width//2,y+width//2), fill=(128,0,0,128), outline=128, width=1)
-im_bgr2rgb.show()
-absolute_path = os.path.dirname(__file__)
-res_fname = absolute_path + "/Result/Detection/"+os.path.basename(videoName).split(".")[0]+".jpg"
-with open(res_fname,"w") as f:
-    im_bgr2rgb.save(f)
+
 
 
 # display the image
