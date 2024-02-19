@@ -10,8 +10,17 @@ def save_velocity_par(csv_file,d):
     # Write the coordinates to the CSV file
     with open(csv_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        for key,value in d.items():
-            writer.writerow([key,value])
+        writer.writerow(["barbell_initial_x_coord, mm",d["barbell_initial_x_coord,mm"]])
+        writer.writerow(["barbell_initial_y_coord, mm", 0.0])
+        writer.writerow(["Y_max,mm", d["Y_max,mm"]])
+        writer.writerow(["Y_catch,mm", d["Y_catch,mm"]])
+        writer.writerow(["X1,mm", d["X1,mm"]])
+        writer.writerow(["X2,mm", d["X2,mm"]])
+        writer.writerow(["X_loop,mm", d["x_loop,mm"]])
+        writer.writerow(["Y_drop,mm", d["y_drop,mm"]])
+        writer.writerow(["Theta, degrees", d["theta"]])
+        writer.writerow(["peak_vertical_velocity, mm/sec", d["peak_vertical_velocity, mm/sec"]])
+        writer.writerow(["Y_catch/Y_max", d["Y_catch/Y_max"]])
     print(f"Parameters saved to {csv_file}")
 
 

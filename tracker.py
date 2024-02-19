@@ -246,7 +246,7 @@ def find_pixel_size_mm(x1,y1,x2,y2,plate_diameter_mm):
 
 
 if __name__ == '__main__':
-    fpath = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9200.mov"
+    fpath = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9203.mov"
     plate_diameter_mm = 450
     myTracker = pathTracker(windowName = 'myTracker',videoName = fpath, plate_diameter_mm = plate_diameter_mm)
     myTracker.start_tracking()
