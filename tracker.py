@@ -6,14 +6,15 @@ import os
 import numpy as np
 from collections import deque
 from detector import BarbellPlateDetector
-from util import save_tracking_par_csv
+from util import save_coordinates_csv, open_video_file
 
 class pathTracker(object):
-    def __init__(self, windowName = 'default window', videoName = "default video"):
+    def __init__(self, plate_diameter_mm,  windowName = 'default window', videoName = "default video"):
         self.selection = None
         self.track_window = None
         self.drag_start = None
         self.videoName = videoName
+        self.plate_diameter_mm = plate_diameter_mm
         self.speed = 50  
         self.video_size = (720//2,1280//2)#(960,540)
         self.box_color = (255,255,255)      
@@ -26,10 +27,7 @@ class pathTracker(object):
         #cv2.setMouseCallback(windowName,self.onmouse)
         self.windowName = windowName
         # load video
-        self.cap = cv2.VideoCapture(videoName)
-        if not self.cap.isOpened():
-            print("Video doesn't exit!", videoName)
-        self.frames_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.cap,self.frames_count = open_video_file(videoName)
         # creat result files
         absolute_path = os.path.dirname(__file__)
         res_fname = os.path.join(absolute_path,"Result","Tracking",os.path.basename(self.videoName).split(".")[0])
@@ -141,6 +139,7 @@ class pathTracker(object):
             if i == 0:
                 img_first = image.copy()
                 self.detect_init_window(img_first)
+                pixel_size = find_pixel_size_mm(self.track_window[0],self.track_window[1], self.track_window[2], self.track_window[3],self.plate_diameter_mm)
                 if self.track_window:
                     cv2.rectangle(img_first, (self.track_window[0],self.track_window[1]), (self.track_window[2], self.track_window[3]), self.box_color, 1)
                 elif self.selection:
@@ -208,7 +207,6 @@ class pathTracker(object):
                 cv2.imwrite(self.res_fname,image)
             # Write the processed frame to the video
             self.video_res_writer.write(image)
-            # tracker path
 
             #time step
             t = 1/self.fps*i
@@ -219,14 +217,36 @@ class pathTracker(object):
             center_point_ys.append(center_point_y)
             ts.append(t)
         #save the traking parameters to csv
-        save_tracking_par_csv(self.csv_fpath,center_point_xs,center_point_ys,ts,self.track_window[0],self.track_window[1],self.track_window[2], self.track_window[3])
+        save_coordinates_csv(self.csv_fpath,center_point_xs,center_point_ys,ts,pixel_size)
         # Release the VideoWriter and close the output file
         self.video_res_writer.release()
         cv2.destroyAllWindows()
+
+def find_pixel_size_mm(x1,y1,x2,y2,plate_diameter_mm):
+    """
+    Calculate the physical size of pixel in barbell plate assuming that pixel represent a window of square shape
+    x1, y1, x2, y2 - coordinates of bounding box: left x, top y, right x, bottom y
+    plate_diameter_mm - actual plate diameter in millimeters
+    :return
+    float, pixel side length
+    """
+    #find longest side
+    width = abs(x2-x1)
+    height = abs(y2-y1)
+    #find pi
+    if width>height:
+        plate_diameter_pix = width
+    else:
+        plate_diameter_pix = height
+    #find number pixel length
+    pix_length = plate_diameter_mm/plate_diameter_pix
+    return pix_length
 
 
 
 
 if __name__ == '__main__':
-    myTracker = pathTracker(windowName = 'myTracker',videoName = r"C:\NewData\Projects\Barbell\data\better_videos\37b9b033d92441df85f1575a8703658d.mov")
+    fpath = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9200.mov"
+    plate_diameter_mm = 450
+    myTracker = pathTracker(windowName = 'myTracker',videoName = fpath, plate_diameter_mm = plate_diameter_mm)
     myTracker.start_tracking()

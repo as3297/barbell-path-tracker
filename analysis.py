@@ -1,27 +1,12 @@
 import numpy as np
 import math
-from util import read_tracking_par_from_csv
+from util import read_tracking_par_from_csv,open_video_file,save_json,save_velocity_par
+import cv2
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt
 
 
-def find_pixel_size_mm(x1,y1,x2,y2,plate_diameter_mm):
-    """
-    Calculate the physical size of pixel in barbell plate assuming that pixel represent a window of square shape
-    x1, y1, x2, y2 - coordinates of bounding box: left x, top y, right x, bottom y
-    plate_diameter_mm - actual plate diameter in millimeters
-    :return
-    float, pixel side length
-    """
-    #find longest side
-    width = abs(x2-x1)
-    height = abs(y2-y1)
-    #find pi
-    if width>height:
-        plate_diameter_pix = width
-    else:
-        plate_diameter_pix = height
-    #find number pixel length
-    pix_length = plate_diameter_mm/plate_diameter_pix
-    return pix_length
 
 def invert_y_axis(y,y_max):
     """
@@ -52,8 +37,7 @@ def calc_velocity(z,frame_length):
     :return:
     [], velocity in mm/sec
     """
-    vel = calc_diff(z)/frame_length
-    vel = vel+ vel[-1]
+    vel = np.array(calc_diff(z))/frame_length
     return vel
 
 def calc_diff(z):
@@ -126,16 +110,13 @@ def find_y_max_idx(y,method="peak_velocity"):
     int
     """
     vel_y = calc_diff(y)
-    thresh = 20 #mm
     #find the velocity extrema
     if method=="peak_velocity":
-        peak_idx = np.argmax(vel_y)
-    else:
-        # find the end of trial
-        for i in range(len(y)):
-            if np.mean(vel_y[i:i+3])<thresh:
-                end_of_trial_idx = i
-        peak_idx = np.argmax(y[:end_of_trial_idx])
+        peak_vel_idx = np.argmax(vel_y)
+    for i in range(peak_vel_idx,len(y)):
+        if np.mean(vel_y[i:i+1])<0:
+            peak_idx = i
+            break
     return peak_idx
 
 def find_idx_max_x_displacement_toward(x,y,catch_idx):
@@ -168,78 +149,151 @@ def find_idx_most_anterior_x(x,idx_y_max,idx_x1):
     """
     #get portion of x between X1 and Y_max
     x_bmt = x[idx_x1:idx_y_max]
-    idx_x2 = np.argmax(x_bmt)
-    return idx_x2
+    idx_x2 = np.argmin(x_bmt)
+    return idx_x2 + idx_x1
 
-def calc_parameters_of_lift(x,y,pixel_size,trial_idx,trial_start,trial_end):
+def calc_parameters_of_lift(x_org,y_org,pixel_size,trial_start,trial_end, y_max_non_inverted,frame_lengh):
     """
 
     :return:
     dictionary,
     """
-    d={"trial_idx":trial_idx,"trial_start":trial_start, "trial_end":trial_end}
+    y = y_org[trial_start:trial_end]
+    x = x_org[trial_start:trial_end]
+    d={"trial_start":trial_start, "trial_end":trial_end}
     #invert y measurments to have minimum at the plate ground level
-    y_max_non_inverted = np.amax(y)
+
     d["barbell_initial_height_pix"]=y_max_non_inverted
-    y = invert_y_axis(y,y_max=y_max_non_inverted)
     # convert pixel into mm
     y_mm = convert_pix_in_mm(y, pixel_size=pixel_size)
     x_mm = convert_pix_in_mm(x,pixel_size=pixel_size)
-    d["pixel_size"]=pixel_size
+    d["pixel_size,mm"]=pixel_size
     #find initial x barbell plate center position
-    x_0 = x_mm[0]
-    y_0 = 0
-    d["barbell_initial_x_coord"]=x_0
+    x0 = x_mm[0]
+    d["barbell_initial_x_coord,mm"]=x0
     #find Y_max
-    y_max_idx = find_y_max_idx(y_mm)
+    y_max_idx = find_y_max_idx(y)
     y_max = y_mm[y_max_idx]
-    d["Y_max"]=y_max
+    d["Y_max,mm"]=y_max
     d["Y_max_idx"] = y_max_idx+trial_start
     #find Y_catch
     y_catch_idx = find_idx_of_catch(y,y_max_idx)
     y_catch = y_mm[y_catch_idx]
-    d["Y_catch"] = y_catch
+    d["Y_catch,mm"] = y_catch
     d["Y_catch_idx"] = y_catch_idx+trial_start
     #find X1
     x1_idx = find_idx_max_x_displacement_toward(x,y,y_catch_idx)
-    x1 = x_mm[x1_idx]-x_0
+    x1 = x_mm[x1_idx]-x0
     y1 = y_mm[x1_idx]
-    d["X1"] = x1
+    d["X1,mm"] = x1
     d["X1_idx"] = x1_idx+trial_start
     #find X2
     x2_idx = find_idx_most_anterior_x(x,y_max_idx,x1_idx)
-    x2 = x_mm[x2_idx]-x_0
-    d["X2"] = x2
+    x2 = x_mm[x2_idx]-x_mm[x1_idx]
+    d["X2,mm"] = x2
     d["X2_idx"] = x2_idx+trial_start
     #find X_loop
     x_loop = x_mm[y_catch_idx] - x_mm[x2_idx]
-    d["x_loop"] = x_loop
+    d["x_loop,mm"] = x_loop
     #find Y_drop
     y_drop = y_max - y_catch
-    d["y_drop"] = y_drop
+    d["y_drop,mm"] = y_drop
     # find angle angle relative to vertical reference line from start position to X1  tg(a)=x_1/y1, a = atan(x1/y1)
-    theta = math.atan(x1/y1)
+    theta = math.degrees(math.atan(x1/y1))
     d["theta_1"] = theta
-    d["peak_vertical_velocity"] = None
+    d["peak_vertical_velocity, mm/sec"] = np.max(calc_velocity(y,frame_lengh))
     d["Y_catch/Y_max"] = y_catch/y_max
     return d
 
-def analyze_csv(fpath):
+def analyze_csv(fpath,fpath_video):
     """
 
     :param fpath:
     :return:
     """
-    x,y,time = read_tracking_par_from_csv(fpath)
+    x,y,time,pixel_size = read_tracking_par_from_csv(fpath)
     y_max = np.amax(y)
     y = invert_y_axis(y, y_max=y_max)
     end_of_trial_idxs = find_end_of_trail(y)
-    pixel_size = find_pixel_size_mm(x1, y1, x2, y2, plate_diameter_mm)
     print(end_of_trial_idxs)
+    trail_d = {}
     for trial_idx,trial_window in enumerate(end_of_trial_idxs):
-        d = calc_parameters_of_lift(x,y,pixel_size,trial_idx,trial_window[0],trial_window[1])
+        d = calc_parameters_of_lift(x,y,pixel_size,trial_window[0],trial_window[1],y_max,time[0])
+        trail_d["trial_idx_{}".format(trial_idx)] = d
+        plot_(x,y,d,trial_idx,trial_window[0],trial_window[1],fpath[:-4])
         print(d)
+        draw_on_video(fpath_video,fpath, x, y, d, trial_idx, trial_window[0],trial_window[1])
+        save_velocity_par(fpath[:-4]+"_wp_trial{}".format(trial_idx)+ ".csv", d)
+    #save_json(fpath[:-4]+".json",trail_d)
+
+
+def plot_(x,y,d,trial_idx,trial_start,trial_end,fpath):
+    plt.figure()
+    plt.title("Trial {}".format(trial_idx))
+    plt.plot(x[trial_start:trial_end],y[trial_start:trial_end])
+    idx = d["Y_max_idx"]
+    plt.text(x[idx],y[idx],"Ymax")
+    plt.plot(x[idx],y[idx],marker='o', color='r')
+    init_barbell_pos = (trial_end-trial_start)*[x[trial_start]]
+    plt.plot(init_barbell_pos, y[trial_start:trial_end],linestyle='--', color='g')
+    idx = d["Y_catch_idx"]
+    plt.text(x[idx], y[idx], "Ycatch")
+    plt.plot(x[idx], y[idx], marker='o', color='r')
+    idx = d["X1_idx"]
+    plt.text(x[idx], y[idx], "X1")
+    plt.plot(x[idx], y[idx], marker='o', color='r')
+    idx = d["X2_idx"]
+    plt.text(x[idx], y[idx], "X2")
+    plt.plot(x[idx], y[idx], marker='o', color='r')
+    plt.savefig(fpath+"_wp_trial{}".format(trial_idx)+".png")
+    plt.show()
+
+def draw_on_video(fpath_video,fpath,x,y,d,trial_idx, start_trial, end_trial):
+    cap, nb_frames = open_video_file(fpath_video)
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    frame_width = 720//2#int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = 1280//2#int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    x = [int(x[i]) for i in range(len(x))]
+    y_max_non_inverted = d["barbell_initial_height_pix"]
+    y = [int(y_max_non_inverted-y[i]) for i in range(len(y))]
+    video_res_writer = cv2.VideoWriter(fpath[:-4]+"_wp_trial{}".format(trial_idx)+ ".mov",fourcc, 15, (frame_width,frame_height))
+    for i in range(nb_frames):
+        ret, frame = cap.read()
+        frame = cv2.resize(frame, (frame_width,frame_height), interpolation=cv2.INTER_CUBIC)
+        if i>start_trial and i<end_trial:
+            #start of trial
+            cv2.putText(frame, "Xst", (x[start_trial], y[start_trial]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255, 0), 2)
+            # coordinate X1
+            idx = d["X1_idx"]
+            if i>idx:
+                cv2.putText(frame, "X1",(x[idx],y[idx]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+            # coordinate X2
+            idx = d["X2_idx"]
+            if i>idx:
+                cv2.putText(frame, "X2", (x[idx], y[idx]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+            # coordinate Y_max
+            idx = d["Y_max_idx"]
+            if i>idx:
+                cv2.putText(frame, "Y_max", (x[idx], y[idx]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+            # coordinate Y_catch
+            idx = d["Y_catch_idx"]
+            if i>idx:
+                cv2.putText(frame, "Y_catch", (x[idx], y[idx]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+            # end of trial
+            if i>end_trial-1:
+                cv2.putText(frame, "Xend", (x[end_trial], y[end_trial]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255,0), 2)
+            # Write the processed frame to the video
+            for j in range(start_trial,i):
+                # path of center point
+                cv2.line(frame, (x[j-1],y[j-1]), (x[j],y[j]), (255,0,0), 2)
+            video_res_writer.write(frame)
+    # Release the VideoWriter and close the output file
+    video_res_writer.release()
+    cv2.destroyAllWindows()
+
+
 
 if __name__=="__main__":
-    fpath = r"C:\NewData\Projects\Barbell\barbell-path-tracker\Result\Tracking\IMG_9200.csv"
-    analyze_csv(fpath)
+    fpath_csv = r"C:\NewData\Projects\Barbell\barbell-path-tracker\Result\Tracking\IMG_9200.csv"
+    fpath_org_video = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9200.mov"
+    analyze_csv(fpath_csv,fpath_org_video)
