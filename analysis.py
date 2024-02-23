@@ -70,7 +70,8 @@ def find_end_of_trail(y):
     """
     #cut video into trials
     # if the barbell is below the threshold and the average velocity over 3 frames is negative then the trial is over
-    floor_value = find_the_ground_from_hist(y)
+    #floor_value = find_the_ground_from_hist(y)
+    floor_value = np.amin(y)+2
     trails= []
     end_lift_prev = 0
     while end_lift_prev>=0:
@@ -78,7 +79,14 @@ def find_end_of_trail(y):
             start_lift,end_lift = find_start_end_lift(y[end_lift_prev:],floor_value)
             start_lift = end_lift_prev + start_lift
             end_lift_prev = end_lift_prev + end_lift
-            trails.append([start_lift,end_lift_prev])
+            #if interval is too short consider it a mistrial
+            if end_lift_prev-start_lift>20:
+                trails.append([start_lift,end_lift_prev])
+            else:
+                break
+            #stop iterating at the end of trial
+            if end_lift==len(y)-1:
+                break
         except:
             print("No more trials")
             end_lift_prev = -1
@@ -94,15 +102,15 @@ def find_start_end_lift(y,floor_level):
     :return:
     """
     nb_frames = len(y)
-    for i in range(nb_frames-1):
+    for i in range(nb_frames):
         if y[i]>floor_level:
             start_lift = i
             break
-    for i in range(start_lift,nb_frames-1):
-        if y[i]<floor_level:
+    for i in range(start_lift,nb_frames):
+        if y[i]<floor_level or i==nb_frames-1:
             end_lift = i
             break
-    return start_lift-10,end_lift
+    return max(0,start_lift-10),end_lift
 
 def find_idx_of_catch(y,y_max_idx):
     """
@@ -114,6 +122,7 @@ def find_idx_of_catch(y,y_max_idx):
     float, index of catch
     """
     vel_y = calc_diff(y)
+    idx_of_catch = None
     for i in range(y_max_idx,len(y)):
         if np.mean(vel_y[i:i + 3]) > 0:
             idx_of_catch = i
@@ -121,7 +130,7 @@ def find_idx_of_catch(y,y_max_idx):
     return idx_of_catch
 
 
-def find_y_max_idx(y,method="peak_velocity"):
+def find_y_max_idx(y):
     """
     Calculate maximum barbell height (Ymax), based on maximum velocity.
     Assuming that the maximum velocity is reached moment before barbell reaches the top,
@@ -133,12 +142,19 @@ def find_y_max_idx(y,method="peak_velocity"):
     """
     vel_y = calc_diff(y)
     #find the velocity extrema
-    if method=="peak_velocity":
-        peak_vel_idx = np.argmax(vel_y)
-    for i in range(peak_vel_idx,len(y)):
-        if np.mean(vel_y[i:i+1])<0:
-            peak_idx = i
+    for i in range(len(y)):
+        start_lift = i
+        if y[i]>5:
             break
+    peak_idx = None
+    for i in range(start_lift,len(y)):
+        if np.mean(vel_y[i:i+10])<0:
+            for j in range(i, len(y)):
+                if vel_y[j] < 0:
+                    peak_idx = j
+                    break
+            break
+    #if Y max idx not found
     return peak_idx
 
 def find_idx_max_x_displacement_toward(x,y,catch_idx):
@@ -201,9 +217,13 @@ def calc_parameters_of_lift(x_org,y_org,pixel_size,trial_start,trial_end, y_max_
     d["Y_max_idx"] = y_max_idx+trial_start
     #find Y_catch
     y_catch_idx = find_idx_of_catch(y,y_max_idx)
-    y_catch = y_mm[y_catch_idx]
+    if not y_catch_idx is None:
+        y_catch = y_mm[y_catch_idx]
+        d["Y_catch_idx"] = y_catch_idx + trial_start
+    else:
+        y_catch = None
+        d["Y_catch_idx"] = None
     d["Y_catch,mm"] = y_catch
-    d["Y_catch_idx"] = y_catch_idx+trial_start
     #find X1
     x1_idx = find_idx_max_x_displacement_toward(x,y,y_catch_idx)
     x1 = x_mm[x1_idx]-x0
@@ -286,6 +306,12 @@ def plot_(x,y,d,trial_idx,trial_start,trial_end,fpath):
 
     plt.show()
 
+def plot_track(x,y):
+    plt.figure()
+    plt.title("Track")
+    plt.plot(x,y)
+    plt.grid()
+    plt.show()
 def draw_on_video(fpath_video,fpath,x,y,d,trial_idx, start_trial, end_trial):
     """
     Draw key points on video of one trial
@@ -306,11 +332,12 @@ def draw_on_video(fpath_video,fpath,x,y,d,trial_idx, start_trial, end_trial):
     x = [int(x[i]) for i in range(len(x))]
     y_max_non_inverted = d["barbell_initial_height_pix"]
     y = [int(y_max_non_inverted-y[i]) for i in range(len(y))]
+
     video_res_writer = cv2.VideoWriter(fpath[:-4]+"_wp_trial{}".format(trial_idx)+ ".mov",fourcc, 15, (frame_width,frame_height))
     for i in range(nb_frames):
         ret, frame = cap.read()
         frame = cv2.resize(frame, (frame_width,frame_height), interpolation=cv2.INTER_CUBIC)
-        if i>start_trial and i<end_trial:
+        if i>=start_trial and i<end_trial:
             #start of trial
             cv2.putText(frame, "Xst", (x[start_trial], y[start_trial]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255, 0), 2)
             # coordinate X1
@@ -333,9 +360,10 @@ def draw_on_video(fpath_video,fpath,x,y,d,trial_idx, start_trial, end_trial):
             if i>end_trial-1:
                 cv2.putText(frame, "Xend", (x[end_trial], y[end_trial]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255,0), 2)
             # Write the processed frame to the video
-            for j in range(start_trial,i):
-                # path of center point
-                cv2.line(frame, (x[j-1],y[j-1]), (x[j],y[j]), (255,0,0), 2)
+            if i>0:
+                for j in range(start_trial+1,i+1):
+                    # path of center point
+                    cv2.line(frame, (x[j-1],y[j-1]), (x[j],y[j]), (255,0,0), 2)
             video_res_writer.write(frame)
     # Release the VideoWriter and close the output file
     video_res_writer.release()
@@ -344,6 +372,6 @@ def draw_on_video(fpath_video,fpath,x,y,d,trial_idx, start_trial, end_trial):
 
 
 if __name__=="__main__":
-    fpath_csv = r"C:\NewData\Projects\Barbell\barbell-path-tracker\Result\Tracking\IMG_9203.csv"
-    fpath_org_video = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9203.mov"
+    fpath_csv = r"C:\NewData\Projects\Barbell\barbell-path-tracker\Result\Tracking\37b9b033d92441df85f1575a8703658d.csv"
+    fpath_org_video = r"C:\NewData\Projects\Barbell\data\better_videos\37b9b033d92441df85f1575a8703658d.mov"
     analyse_csv(fpath_csv,fpath_org_video)

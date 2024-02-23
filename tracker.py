@@ -9,11 +9,12 @@ from detector import BarbellPlateDetector
 from util import save_coordinates_csv, open_video_file
 
 class pathTracker(object):
-    def __init__(self, plate_diameter_mm,  windowName = 'default window', videoName = "default video"):
+    def __init__(self, plate_diameter_mm,  windowName = 'default window', videoName = "default video",flip_image=False):
         self.selection = None
         self.track_window = None
         self.drag_start = None
         self.videoName = videoName
+        self.flip_image = flip_image
         self.plate_diameter_mm = plate_diameter_mm
         self.speed = 50  
         self.video_size = (720//2,1280//2)#(960,540)
@@ -21,7 +22,7 @@ class pathTracker(object):
         self.path_color = (0,0,255)
         #                          0        1     2      3         4           5            6              7              8       
         self.tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'Dlib_Tracker', 'CamShift','Template_Matching']
-        self.tracker_type = self.tracker_types[6]
+        self.tracker_type = self.tracker_types[2]
         # create tracker window
         cv2.namedWindow(windowName,cv2.WINDOW_AUTOSIZE)
         #cv2.setMouseCallback(windowName,self.onmouse)
@@ -45,7 +46,7 @@ class pathTracker(object):
         elif self.tracker_type == 'MIL':
             self.tracker = cv2.TrackerMIL_create() 
         elif self.tracker_type == 'KCF':
-            self.tracker = cv2.TrackerKCF_create() 
+            self.tracker = cv2.TrackerKCF_create()
         elif self.tracker_type == 'TLD':
             self.tracker = cv2.TrackerTLD_create()  
         elif self.tracker_type == 'MEDIANFLOW':
@@ -135,6 +136,8 @@ class pathTracker(object):
             print("Processing Frame {}".format(i))
             img_raw = self.frame
             image = cv2.resize(img_raw.copy(), self.video_size, interpolation = cv2.INTER_CUBIC)
+            if self.flip_image:
+                image = cv2.flip(image,1)
             # only need to select object on the first frame
             if i == 0:
                 img_first = image.copy()
@@ -246,7 +249,8 @@ def find_pixel_size_mm(x1,y1,x2,y2,plate_diameter_mm):
 
 
 if __name__ == '__main__':
-    fpath = r"C:\NewData\Projects\Barbell\data\initial_test\IMG_9203.mov"
+    fpath = r"C:\NewData\Projects\Barbell\data\better_videos\82dc0cd139d44b01a84b11e4f3f7e893.mov"
     plate_diameter_mm = 450
-    myTracker = pathTracker(windowName = 'myTracker',videoName = fpath, plate_diameter_mm = plate_diameter_mm)
+    flip_image = True
+    myTracker = pathTracker(windowName = 'myTracker',videoName = fpath, plate_diameter_mm = plate_diameter_mm, flip_image=flip_image)
     myTracker.start_tracking()
